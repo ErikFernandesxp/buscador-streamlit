@@ -2,19 +2,17 @@ import streamlit as st
 import requests
 from difflib import SequenceMatcher
 
-st.set_page_config(page_title="Buscador Inteligente", layout="wide")
+st.set_page_config(page_title="Buscador Pro", layout="wide")
 
-st.title("🔎 Buscador Inteligente de Produtos")
+st.title("🔎 Buscador de Produtos")
 
-# INPUT
-query = st.text_input("Digite o produto")
+query = st.text_input("Buscar produto")
 max_price = st.slider("Preço máximo", 0, 20000, 20000)
 
-# SIMILARIDADE (IA leve)
+# ---------------- IA ----------------
 def similar(a, b):
     return SequenceMatcher(None, a, b).ratio()
 
-# AGRUPAMENTO
 def agrupar(produtos):
     grupos = []
 
@@ -34,43 +32,34 @@ def agrupar(produtos):
 
     for g in grupos:
         melhor = sorted(g, key=lambda x: x["price"])[0]
-
-        resultado.append({
-            "title": melhor["title"],
-            "price": melhor["price"],
-            "link": melhor.get("link", "#"),
-            "source": melhor["source"]
-        })
+        resultado.append(melhor)
 
     return resultado
 
-# MERCADO LIVRE
+# ---------------- BUSCAS ----------------
 def buscar_ml(q):
-    try:
-        url = f"https://api.mercadolibre.com/sites/MLB/search?q={q}"
-        res = requests.get(url)
-        data = res.json()
+    url = f"https://api.mercadolibre.com/sites/MLB/search?q={q}"
+    res = requests.get(url).json()
 
-        return [
-            {
-                "title": i["title"],
-                "price": i["price"],
-                "link": i["permalink"],
-                "source": "Mercado Livre"
-            }
-            for i in data["results"][:15]
-        ]
-    except:
-        return []
+    return [
+        {
+            "title": i["title"],
+            "price": i["price"],
+            "link": i["permalink"],
+            "image": i["thumbnail"],
+            "source": "Mercado Livre"
+        }
+        for i in res["results"][:15]
+    ]
 
-# AMAZON (simples)
 def buscar_amazon(q):
     try:
+        from bs4 import BeautifulSoup
+
         url = f"https://www.amazon.com.br/s?k={q}"
         headers = {"User-Agent": "Mozilla/5.0"}
-        res = requests.get(url, headers=headers)
+        res = requests.get(url, headers=headers, timeout=5)
 
-        from bs4 import BeautifulSoup
         soup = BeautifulSoup(res.text, "html.parser")
 
         items = []
@@ -92,41 +81,68 @@ def buscar_amazon(q):
     except:
         return []
 
-# EXECUÇÃO
+# ---------------- EXECUÇÃO ----------------
 if st.button("Buscar") and query:
 
     with st.spinner("Buscando produtos..."):
 
-        dados = []
-        dados += buscar_ml(query)
-        dados += buscar_amazon(query)
+        ml = buscar_ml(query)
+        amz = buscar_amazon(query)
 
-        # FILTRO DE PREÇO
-        dados = [d for d in dados if d["price"] <= max_price]
+        # FILTRO
+        ml = [i for i in ml if i["price"] <= max_price]
+        amz = [i for i in amz if i["price"] <= max_price]
 
-        # IA AGRUPAMENTO
-        dados = agrupar(dados)
+        # IA
+        ml = agrupar(ml)
+        amz = agrupar(amz)
 
-        # ORDENAR
-        dados = sorted(dados, key=lambda x: x["price"])
+        ml = sorted(ml, key=lambda x: x["price"])
+        amz = sorted(amz, key=lambda x: x["price"])
 
-    st.success(f"{len(dados)} produtos encontrados")
+    st.success("Resultados encontrados")
 
-    # RESULTADOS
-    cols = st.columns(3)
+    # ---------------- ABAS ----------------
+    tab1, tab2, tab3 = st.tabs(["🟡 Mercado Livre", "🔵 Amazon", "🌐 Todos"])
 
-    for i, d in enumerate(dados):
-        with cols[i % 3]:
-            st.markdown(f"### {d['title'][:60]}...")
-            st.write(f"💰 R$ {d['price']}")
-            st.write(f"🏪 {d['source']}")
-            st.markdown(f"[🔗 Ver produto]({d['link']})")
-            st.divider()
+    # -------- Mercado Livre --------
+    with tab1:
+        cols = st.columns(3)
+        for i, d in enumerate(ml):
+            with cols[i % 3]:
+                st.image(d.get("image", ""), width=150)
+                st.markdown(f"**{d['title'][:60]}...**")
+                st.write(f"💰 R$ {d['price']}")
+                st.markdown(f"[Comprar]({d['link']})")
+                st.divider()
 
-# FACEBOOK (BOTÃO)
+    # -------- Amazon --------
+    with tab2:
+        cols = st.columns(3)
+        for i, d in enumerate(amz):
+            with cols[i % 3]:
+                st.markdown(f"**{d['title'][:60]}...**")
+                st.write(f"💰 R$ {d['price']}")
+                st.write("Amazon")
+                st.divider()
+
+    # -------- Todos (Comparador) --------
+    with tab3:
+        todos = ml + amz
+        todos = sorted(todos, key=lambda x: x["price"])
+
+        cols = st.columns(3)
+
+        for i, d in enumerate(todos):
+            with cols[i % 3]:
+                st.markdown(f"### {d['title'][:50]}...")
+                st.write(f"🔥 R$ {d['price']}")
+                st.write(f"🏪 {d['source']}")
+                if "link" in d:
+                    st.markdown(f"[Ver produto]({d['link']})")
+                st.divider()
+
+# Facebook
 if query:
-    st.markdown("### 🔎 Buscar também em outras plataformas")
-    st.markdown(
-        f"[Facebook Marketplace](https://www.facebook.com/marketplace/search?query={query})",
-        unsafe_allow_html=True
-    )
+    st.markdown("---")
+    st.markdown(f"[🔎 Buscar no Facebook Marketplace](https://www.facebook.com/marketplace/search?query={query})")
