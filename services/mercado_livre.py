@@ -21,7 +21,7 @@ def buscar(q):
                 "image": i.get("thumbnail", ""),
                 "source": "Mercado Livre"
             }
-            for i in data["results"][:20]
+            for i in data["results"][:30]
             if i.get("price")
         ]
 
