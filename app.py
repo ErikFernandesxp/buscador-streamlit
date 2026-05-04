@@ -2,9 +2,9 @@ import streamlit as st
 from services import mercado_livre, amazon
 from utils.ai import agrupar
 
-st.set_page_config(layout="wide")
+st.set_page_config(page_title="Comparador PRO", layout="wide")
 
-# CSS MELHORADO
+# CSS PROFISSIONAL
 st.markdown("""
 <style>
 .main {
@@ -13,37 +13,28 @@ st.markdown("""
 }
 
 .card {
-    background: #1e293b;
+    background: #111827;
     padding: 15px;
     border-radius: 12px;
     margin-bottom: 15px;
     color: white;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
 }
 
 .price {
-    font-size: 20px;
+    font-size: 18px;
     color: #22c55e;
     font-weight: bold;
 }
 
 .title {
     font-size: 14px;
+    margin-bottom: 8px;
 }
 
 .source {
     font-size: 12px;
-    color: #94a3b8;
-}
-
-.button {
-    display: inline-block;
-    padding: 6px 10px;
-    background: #3b82f6;
-    color: white;
-    border-radius: 6px;
-    text-decoration: none;
-    margin-top: 5px;
+    color: #9ca3af;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -55,25 +46,22 @@ max_price = st.slider("Preço máximo", 0, 20000, 20000)
 
 if st.button("Buscar") and query:
 
-    ml = mercado_livre.buscar(query)
-    amz = amazon.buscar(query)
+    with st.spinner("Buscando melhores preços..."):
 
-    # FILTRO
-    ml = [i for i in ml if i["price"] <= max_price]
-    amz = [i for i in amz if i["price"] <= max_price]
+        ml = mercado_livre.buscar(query)
+        amz = amazon.buscar(query)
 
-    # IA
-    ml = agrupar(ml)
-    amz = agrupar(amz)
+        ml = [i for i in ml if i["price"] <= max_price]
+        amz = [i for i in amz if i["price"] <= max_price]
 
-    # JUNTA TUDO
-    todos = ml + amz
+        ml = agrupar(ml)
+        amz = agrupar(amz)
 
-    # GARANTE RESULTADO
+        todos = sorted(ml + amz, key=lambda x: x["price"])
+
     if not todos:
-        st.warning("Nenhum resultado direto encontrado.")
+        st.warning("Nenhum resultado encontrado.")
         st.markdown(f"""
-        🔎 Tentar manualmente:
         - [Mercado Livre](https://lista.mercadolivre.com.br/{query})
         - [Amazon](https://www.amazon.com.br/s?k={query})
         - [OLX](https://www.olx.com.br/brasil?q={query})
@@ -81,10 +69,7 @@ if st.button("Buscar") and query:
         """)
         st.stop()
 
-    # ORDENA
-    todos = sorted(todos, key=lambda x: x["price"])
-
-    # MELHOR PREÇO
+    # MELHOR OFERTA
     melhor = todos[0]
 
     st.markdown("## 🏆 Melhor oferta")
@@ -93,33 +78,38 @@ if st.button("Buscar") and query:
         <h3>{melhor['title']}</h3>
         <div class="price">R$ {melhor['price']}</div>
         <div class="source">{melhor['source']}</div>
-        <a class="button" href="{melhor.get('link','#')}" target="_blank">Comprar</a>
     </div>
     """, unsafe_allow_html=True)
 
-    st.markdown("## 🛍️ Resultados")
+    st.link_button("🔥 Comprar melhor oferta", melhor.get("link", "#"))
+
+    st.markdown("## 🛍️ Todos os resultados")
 
     cols = st.columns(4)
 
     for i, d in enumerate(todos):
         with cols[i % 4]:
+            if d.get("image"):
+                st.image(d["image"], width=120)
+
             st.markdown(f"""
             <div class="card">
                 <div class="title">{d['title'][:60]}</div>
                 <div class="price">R$ {d['price']}</div>
                 <div class="source">{d['source']}</div>
-                <a class="button" href="{d.get('link','#')}" target="_blank">Ver</a>
             </div>
             """, unsafe_allow_html=True)
 
-    # LINKS EXTRAS (OLX + FACEBOOK)
+            st.link_button("Ver produto", d.get("link", "#"))
+
+    # LINKS EXTRAS
     st.markdown("---")
     st.markdown("### 🔎 Mais opções")
 
     col1, col2 = st.columns(2)
 
     with col1:
-        st.markdown(f"[🟠 Buscar na OLX](https://www.olx.com.br/brasil?q={query})")
+        st.link_button("🟠 Buscar na OLX", f"https://www.olx.com.br/brasil?q={query}")
 
     with col2:
-        st.markdown(f"[🔵 Facebook Marketplace](https://www.facebook.com/marketplace/search?query={query})")
+        st.link_button("🔵 Facebook Marketplace", f"https://www.facebook.com/marketplace/search?query={query}")
